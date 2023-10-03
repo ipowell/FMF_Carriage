@@ -1,0 +1,12 @@
+x_target,0
+y_target,0
+z_target,0
+x_actual,246.0
+y_actual,74.0
+z_actual,90.0
+x_fwd_limit,400
+x_rev_limit,50
+y_fwd_limit,1500
+y_rev_limit,-1500
+z_fwd_limit,1100
+z_rev_limit,-1
