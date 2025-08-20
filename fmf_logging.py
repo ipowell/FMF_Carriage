@@ -1,5 +1,5 @@
-import os
-import sys
+import time
+_ERROR_LOG_FILE = "mwt_error_log.txt"
 
 # - event log functions
 # -- used to print event descriptions or carriage status to the event log file
@@ -7,6 +7,11 @@ def write_log(user_action: str):
     print(user_action)
     # with open('mwt_log.txt', 'w', newline='') as txt_file:
     #     txt_file.write(user_action)
+
+def log_error(error_message: str):
+    print(error_message)
+    with open(_ERROR_LOG_FILE, 'a', newline='') as txt_file:
+        txt_file.write(time.strftime("%Y-%m-%d %H:%M:%S") + " " + error_message)
 
 # [DEPRECATED FOR LOG FILE]
 # -- used to print event descriptions or carriage status to the GUI event log
