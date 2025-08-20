@@ -9,7 +9,7 @@ import csv  # package: reading and writing to CSV (comma separated values) files
 import gclib  # imports gclib.py file, must be in same directory
 from threading import *  # package: allows tkinter to have multiple threads to run simultaneously
 # import traceback  # module: provides traceback object associated with an exception
-# import logging  # module: allows the program to output errors and exceptions to the log file
+import logging  # module: allows the program to output errors and exceptions to the log file
 import os  # package: used to access user's OS for files and machine time
 import sys  # package: used to access user's OS for files
 
@@ -627,7 +627,7 @@ class MoveCarriage(ctk.CTk):
         c = galil.GCommand
         c('AB')
         del c
-        self.write_log("Carriage stopped!")
+        logging.write_log("Carriage stopped!")
 
     # -- close carriage connection and exit program window
     def quit_carriage(self):
@@ -677,7 +677,7 @@ class MoveCarriage(ctk.CTk):
         mwt_dict |= {'z_stop_code': z_sc}
         self.csv_generate()
         self.after(10, self.update_carriage)
-        # self.after(10, self.write_log("Carriage updated"))
+        # self.after(10, logging.write_log("Carriage updated"))
 
     # -- create thread to constantly update carriage position and stop codes
     def carriage_threading(self):
@@ -692,24 +692,24 @@ class MoveCarriage(ctk.CTk):
         c = galil.GCommand
         if (float(axis_limit_rev.get()) > float(move_target) or
                 float(move_target) > float(axis_limit_fwd.get())):
-            self.write_log("Move is beyond limits!")
+            logging.write_log("Move is beyond limits!")
         elif axis == "X":
             self.x_target.set(float(move_target))
-            self.write_log("Move initiated, target is X=" + move_target)
+            logging.write_log("Move initiated, target is X=" + move_target)
             c('PAA=' + str(move_encoder))
             c('BGA')
         elif axis == "Y":
             self.y_target.set(float(move_target))
-            self.write_log("Move initiated, target is Y=" + move_target)
+            logging.write_log("Move initiated, target is Y=" + move_target)
             c('PAB=' + str(move_encoder))
             c('BGB')
         elif axis == "Z":
             self.z_target.set(float(move_target))
-            self.write_log("Move initiated, target is Z=" + move_target)
+            logging.write_log("Move initiated, target is Z=" + move_target)
             c('PAC=' + str(move_encoder))
             c('BGC')
         else:
-            self.write_log("Moving error!")
+            logging.write_log("Moving error!")
         del c
 
     # -- set axis position target value to actual value
@@ -722,19 +722,19 @@ class MoveCarriage(ctk.CTk):
             c('DPA=' + str(value_encoder))
             self.x_target.set(float(set_target))
             mwt_dict |= {'x_actual': set_target}
-            self.write_log("X position is now: " + set_target)
+            logging.write_log("X position is now: " + set_target)
         elif axis == "Y":
             c('DPB=' + str(value_encoder))
             self.y_target.set(float(set_target))
             mwt_dict |= {'y_actual': set_target}
-            self.write_log("Y position is now: " + set_target)
+            logging.write_log("Y position is now: " + set_target)
         elif axis == "Z":
             c('DPC=' + str(value_encoder))
             self.z_target.set(float(set_target))
             mwt_dict |= {'z_actual': set_target}
-            self.write_log("Z position is now: " + set_target)
+            logging.write_log("Z position is now: " + set_target)
         else:
-            self.write_log("Set axis error!")
+            logging.write_log("Set axis error!")
         del c
         self.csv_generate()
 
@@ -868,7 +868,7 @@ class MoveCarriage(ctk.CTk):
         self.z_limit_fwd.set(z_fwd)
         self.z_limit_rev.set(z_rev)
         del c
-        self.write_log("Limits recalled!")
+        logging.write_log("Limits recalled!")
 
     # -- recalls saved SAD values from csv and outputs them in the log
     # noinspection PyTypeChecker
@@ -894,7 +894,7 @@ class MoveCarriage(ctk.CTk):
         self.decel_z.set(z_dc)
         self.csv_recall()
         del c
-        self.write_log("SAD attributes recalled!")
+        logging.write_log("SAD attributes recalled!")
 
     # -- recalls saved PID values from csv and outputs them in the log
     # noinspection PyTypeChecker
@@ -920,7 +920,7 @@ class MoveCarriage(ctk.CTk):
         self.kd_z.set(z_kd)
         self.csv_recall()
         del c
-        self.write_log("PID attributes recalled!")
+        logging.write_log("PID attributes recalled!")
 
     # -- csv file that stores carriage values such as current position and movement limits
     @staticmethod
@@ -946,7 +946,7 @@ class MoveCarriage(ctk.CTk):
             reader = csv.reader(file)
             for row in reader:
                 print(','.join(row))
-        self.write_log(mwt_dict)
+        logging.write_log(mwt_dict)
 
 
 if __name__ == "__main__":
