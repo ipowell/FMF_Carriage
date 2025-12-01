@@ -1,0 +1,12 @@
+# Virtual Environment
+.venv/
+
+# Created binaries
+dist/
+build/
+
+# Logs
+mwt_error_log.txt
+
+# Used for local testing, should be removed eventually
+reference/
