@@ -6,6 +6,12 @@
 # 2. They were previously being written to the CSV file every loop even though they were not changing.
 #    This should reduce the size of the CSV file and improve performance.
 
+# Encoder conversion factor (encoder counts per millimeter)
+# This defines the hardware relationship between encoder position and physical distance
+# This comment was left in the original carriage_gui code:
+#   > e.g. 40 encoder counts per mm (230*40=9200)
+encoder_counts_per_mm: 40
+
 # Default starting positions (millimeters)
 # These are fallback values if mwt_storage.csv is missing runtime positions
 # Note: This preserves the original behavior from the legacy CSV file

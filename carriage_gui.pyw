@@ -97,6 +97,10 @@ try:
             fmf_logging.log_error(f"Missing 'default_stop_code' in constants file")
         mwt_constants['default_stop_code'] = constants_data.get('default_stop_code', 1)
         
+        if 'encoder_counts_per_mm' not in constants_data:
+            fmf_logging.log_error(f"Missing 'encoder_counts_per_mm' in constants file")
+        mwt_constants['encoder_counts_per_mm'] = constants_data.get('encoder_counts_per_mm', 40)
+        
         limits = constants_data.get('limits', {})
         if 'limits' not in constants_data:
             fmf_logging.log_error(f"Missing 'limits' section in constants file")
@@ -199,12 +203,15 @@ class MoveCarriage(ctk.CTk):
         else:
             c = galil.GCommand
             status = "Connected"
+            
+            # Read encoder conversion factor once
+            encoder_cpm = mwt_constants['encoder_counts_per_mm']
 
             # -- "A"/x axis default settings
             c('SHA')  # sets servo motor "A" to x-axis
-            c('DPA=' + str(float(mwt_dict.get('x_actual', str(mwt_constants['default_x']))) * 40))  # x-axis last stored position
-            c('FLA=' + str(float(mwt_constants['x_fwd_limit']) * 40))  # x-axis last stored fwd limit
-            c('BLA=' + str(float(mwt_constants['x_rev_limit']) * 40))  # x-axis last stored rev limit
+            c('DPA=' + str(float(mwt_dict.get('x_actual', str(mwt_constants['default_x']))) * encoder_cpm))  # x-axis last stored position
+            c('FLA=' + str(float(mwt_constants['x_fwd_limit']) * encoder_cpm))  # x-axis last stored fwd limit
+            c('BLA=' + str(float(mwt_constants['x_rev_limit']) * encoder_cpm))  # x-axis last stored rev limit
             c('SPA=' + str(mwt_constants['sp_x']))  # x-axis speed, 2000 cts/sec
             c('ACA=' + str(mwt_constants['ac_x']))  # x-axis acceleration, 1024 cts/sec
             c('DCA=' + str(mwt_constants['dc_x']))  # x-axis deceleration, 1024 cts/sec
@@ -214,9 +221,9 @@ class MoveCarriage(ctk.CTk):
 
             # -- "B"/y axis default settings
             c('SHB')  # sets servo motor "B" to y-axis
-            c('DPB=' + str(float(mwt_dict.get('y_actual', str(mwt_constants['default_y']))) * 40))  # y-axis last stored position
-            c('FLB=' + str(float(mwt_constants['y_fwd_limit']) * 40))  # y-axis last stored fwd limit
-            c('BLB=' + str(float(mwt_constants['y_rev_limit']) * 40))  # y-axis last stored rev limit
+            c('DPB=' + str(float(mwt_dict.get('y_actual', str(mwt_constants['default_y']))) * encoder_cpm))  # y-axis last stored position
+            c('FLB=' + str(float(mwt_constants['y_fwd_limit']) * encoder_cpm))  # y-axis last stored fwd limit
+            c('BLB=' + str(float(mwt_constants['y_rev_limit']) * encoder_cpm))  # y-axis last stored rev limit
             c('SPB=' + str(mwt_constants['sp_y']))  # y-axis speed, 1500 cts/sec
             c('ACB=' + str(mwt_constants['ac_y']))  # y-axis acceleration, 1024 cts/sec
             c('DCB=' + str(mwt_constants['dc_y']))  # y-axis deceleration, 1024 cts/sec
@@ -226,9 +233,9 @@ class MoveCarriage(ctk.CTk):
 
             # -- "C"/z axis default settings
             c('SHC')  # sets servo motor "C" to z-axis
-            c('DPC=' + str(float(mwt_dict.get('z_actual', str(mwt_constants['default_z']))) * 40))  # z-axis last stored position
-            c('FLC=' + str(float(mwt_constants['z_fwd_limit']) * 40))  # z-axis last stored fwd limit
-            c('BLC=' + str(float(mwt_constants['z_rev_limit']) * 40))  # z-axis last stored rev limit
+            c('DPC=' + str(float(mwt_dict.get('z_actual', str(mwt_constants['default_z']))) * encoder_cpm))  # z-axis last stored position
+            c('FLC=' + str(float(mwt_constants['z_fwd_limit']) * encoder_cpm))  # z-axis last stored fwd limit
+            c('BLC=' + str(float(mwt_constants['z_rev_limit']) * encoder_cpm))  # z-axis last stored rev limit
             c('SPC=' + str(mwt_constants['sp_z']))  # z-axis speed, 300 cts/sec
             c('ACC=' + str(mwt_constants['ac_z']))  # z-axis acceleration, 1024 cts/sec
             c('DCC=' + str(mwt_constants['dc_z']))  # z-axis deceleration, 1024 cts/sec
@@ -801,13 +808,14 @@ class MoveCarriage(ctk.CTk):
         try:
             global mwt_dict
             c = galil.GCommand
-            x_pos = float(c('TPA')) / 40
+            encoder_cpm = mwt_constants['encoder_counts_per_mm']
+            x_pos = float(c('TPA')) / encoder_cpm
             x_pos_str = str(x_pos)
             x_pos_round_str = str("%.1f" % x_pos)
-            y_pos = float(c('TPB')) / 40
+            y_pos = float(c('TPB')) / encoder_cpm
             y_pos_str = str(y_pos)
             y_pos_round_str = str("%.1f" % y_pos)
-            z_pos = float(c('TPC')) / 40
+            z_pos = float(c('TPC')) / encoder_cpm
             z_pos_str = str(z_pos)
             z_pos_round_str = str("%.1f" % z_pos)
 
@@ -845,7 +853,7 @@ class MoveCarriage(ctk.CTk):
     def move_axis(self, axis, move_target, axis_limit_fwd, axis_limit_rev):
         app.bind_all("<1>", lambda event: event.widget.focus_set())
         try:
-            move_encoder = str(float(move_target) * 40)
+            move_encoder = str(float(move_target) * mwt_constants['encoder_counts_per_mm'])
             c = galil.GCommand
             if (float(axis_limit_rev.get()) > float(move_target) or
                     float(move_target) > float(axis_limit_fwd.get())):
@@ -878,7 +886,7 @@ class MoveCarriage(ctk.CTk):
         global mwt_dict
         try:
             c = galil.GCommand
-            value_encoder = str(float(set_target) * 40)  # e.g. 40 encoder counts per mm (230*40=9200)
+            value_encoder = str(float(set_target) * mwt_constants['encoder_counts_per_mm'])
             if axis == "X":
                 c('DPA=' + str(value_encoder))
                 self.x_target.set(float(set_target))
@@ -909,12 +917,13 @@ class MoveCarriage(ctk.CTk):
     def set_limits(self):
         try:
             c = galil.GCommand
-            c('FLA=' + str(float(self.entry_x_limit_fwd.get()) * 40))
-            c('BLA=' + str(float(self.entry_x_limit_rev.get()) * 40))
-            c('FLB=' + str(float(self.entry_y_limit_fwd.get()) * 40))
-            c('BLB=' + str(float(self.entry_y_limit_rev.get()) * 40))
-            c('FLC=' + str(float(self.entry_z_limit_fwd.get()) * 40))
-            c('BLC=' + str(float(self.entry_z_limit_rev.get()) * 40))
+            encoder_cpm = mwt_constants['encoder_counts_per_mm']
+            c('FLA=' + str(float(self.entry_x_limit_fwd.get()) * encoder_cpm))
+            c('BLA=' + str(float(self.entry_x_limit_rev.get()) * encoder_cpm))
+            c('FLB=' + str(float(self.entry_y_limit_fwd.get()) * encoder_cpm))
+            c('BLB=' + str(float(self.entry_y_limit_rev.get()) * encoder_cpm))
+            c('FLC=' + str(float(self.entry_z_limit_fwd.get()) * encoder_cpm))
+            c('BLC=' + str(float(self.entry_z_limit_rev.get()) * encoder_cpm))
             self.x_limit_fwd.set(self.entry_x_limit_fwd.get())
             self.x_limit_fwd.set(self.entry_x_limit_fwd.get())
             self.x_limit_rev.set(self.entry_x_limit_rev.get())
@@ -1000,12 +1009,13 @@ class MoveCarriage(ctk.CTk):
     # noinspection PyTypeChecker
     def recall_limits(self):
         c = galil.GCommand
-        x_fwd = (float(c('FLA=?')) / 40)
-        x_rev = (float(c('BLA=?')) / 40)
-        y_fwd = (float(c('FLB=?')) / 40)
-        y_rev = (float(c('BLB=?')) / 40)
-        z_fwd = (float(c('FLC=?')) / 40)
-        z_rev = (float(c('BLC=?')) / 40)
+        encoder_cpm = mwt_constants['encoder_counts_per_mm']
+        x_fwd = (float(c('FLA=?')) / encoder_cpm)
+        x_rev = (float(c('BLA=?')) / encoder_cpm)
+        y_fwd = (float(c('FLB=?')) / encoder_cpm)
+        y_rev = (float(c('BLB=?')) / encoder_cpm)
+        z_fwd = (float(c('FLC=?')) / encoder_cpm)
+        z_rev = (float(c('BLC=?')) / encoder_cpm)
         self.x_limit_fwd.set(x_fwd)
         self.x_limit_rev.set(x_rev)
         self.y_limit_fwd.set(y_fwd)
