@@ -32,7 +32,7 @@ After activating the virtual environment, install `pyinstaller` by running `pip 
 
 Then, run:
 ```
-pyinstaller carriage_gui.pyw
+pyinstaller --clean --noconfirm carriage_gui.spec
 ```
 
 This will output the executable to the `dist` directory.
