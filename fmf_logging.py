@@ -1,6 +1,10 @@
 import time
 _ERROR_LOG_FILE = "mwt_error_log.txt"
 
+def set_error_log_file(path: str):
+    global _ERROR_LOG_FILE
+    _ERROR_LOG_FILE = path
+
 # - event log functions
 # -- used to print event descriptions or carriage status to the event log file
 def write_log(user_action: str):

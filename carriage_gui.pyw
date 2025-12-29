@@ -12,11 +12,7 @@ from threading import *  # package: allows tkinter to have multiple threads to r
 import fmf_logging  # module: allows the program to output errors and exceptions to the log file
 import os  # package: used to access user's OS for files and machine time
 import sys  # package: used to access user's OS for files
-
-# default themes for the program
-ctk.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
-ctk.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
-
+import configparser  # module: load INI configuration at runtime
 
 # gets absolute path to resource (icon), works for dev and for PyInstaller
 def resource_path(relative_path):
@@ -24,11 +20,43 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-# alternate between filepaths for executable vs dev
-filepath = os.path.dirname(sys.executable) + "\\_internal\\mwt_storage.csv"
-# filepath = os.path.dirname(sys.executable) + "\\mwt_storage.csv"
+# configuration loading (supports env var override CARRIAGE_CONFIG)
+def _load_config():
+    config = configparser.ConfigParser()
+    env_path = os.environ.get('CARRIAGE_CONFIG')
+    if env_path:
+        cfg_path = os.path.abspath(os.path.expanduser(env_path))
+    else:
+        cfg_path = resource_path('config.ini')
+    config.read(cfg_path, encoding='utf-8')
+    return config
+
+_config = _load_config()
+
+def _resolve_path(path_value: str) -> str:
+    if not path_value:
+        return ""
+    expanded = os.path.expanduser(path_value)
+    if os.path.isabs(expanded):
+        return expanded
+    return resource_path(expanded)
+
+# configured serial defaults
+_serial_port = _config.get('serial', 'port', fallback='COM2')
+_serial_baud = _config.get('serial', 'baud', fallback='19200')
+
+# configured file paths
+_csv_path_cfg = _config.get('files', 'mwt_storage', fallback='mwt_storage.csv')
+_log_path_cfg = _config.get('files', 'error_log', fallback='mwt_error_log.txt')
+
+# UI appearance and color
+ctk.set_appearance_mode(_config.get('ui', 'appearance', fallback='system').capitalize())  # Modes: "system", "dark", "light"
+ctk.set_default_color_theme(_config.get('ui', 'color', fallback='blue'))  # Themes: "blue", "green", "dark-blue", "sweetkind"
+
+# resolve and open CSV; set error log path
+filepath = _resolve_path(_csv_path_cfg)
 mwt_storage_reader = csv.reader(open(filepath, 'r'))
-# mwt_storage_reader = csv.reader(open('mwt_storage.csv', 'r'))
+fmf_logging.set_error_log_file(_resolve_path(_log_path_cfg))
 mwt_dict = {}
 for mwt_storage_row in mwt_storage_reader:
     k, v = mwt_storage_row
@@ -50,7 +78,7 @@ class MoveCarriage(ctk.CTk):
         # - program attempts to connect to carriage, COM port must match what cpu sees/has assigned
         try:
             print('gclib version:', galil.GVersion())  # prints installed gclib version
-            galil.GOpen('COM2 --baud 19200')  # change to COM port used by carriage
+            galil.GOpen(_serial_port + ' --baud ' + _serial_baud)  # change to COM port used by carriage
             print(galil.GInfo())  # prints connection information for carriage
 
         # - exception handler if program cannot connect to carriage
@@ -644,7 +672,7 @@ class MoveCarriage(ctk.CTk):
         else:
             status = "Connected"
             print('gclib version:', galil.GVersion())  # prints installed gclib version
-            galil.GOpen('COM2 --baud 19200')  # change to COM port used by carriage
+            galil.GOpen(_serial_port + ' --baud ' + _serial_baud)  # change to COM port used by carriage
             print(galil.GInfo())  # prints connection information for carriage
 
     # TODO: motion complete after target - position = 0?

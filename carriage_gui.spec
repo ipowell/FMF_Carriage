@@ -5,7 +5,7 @@ a = Analysis(
     ['carriage_gui.pyw'],
     pathex=[],
     binaries=[],
-    datas=[('mwt_storage.csv', '.')],
+    datas=[('mwt_storage.csv', '.'), ('config.ini', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
