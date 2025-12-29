@@ -17,7 +17,7 @@ import configparser  # module: load INI configuration at runtime
 # install global exception hook to capture unhandled errors
 def _excepthook(exc_type, exc, tb):
     import traceback
-    fmf_logging.log_error("Unhandled exception:\n" + "".join(traceback.format_exception(exc_type, exc, tb)) + "\n")
+    fmf_logging.log_error("Unhandled exception:\n" + "".join(traceback.format_exception(exc_type, exc, tb)) + "")
 sys.excepthook = _excepthook
 
 # gets absolute path to resource (icon), works for dev and for PyInstaller
@@ -36,9 +36,9 @@ def _load_config():
         cfg_path = resource_path('config.ini')
     try:
         if not os.path.exists(cfg_path):
-            fmf_logging.log_error(f"Config file not found: {cfg_path}\n")
+            fmf_logging.log_error(f"Config file not found: {cfg_path}")
     except Exception as e:
-        fmf_logging.log_error(f"Config path check failed: {e}\n")
+        fmf_logging.log_error(f"Config path check failed: {e}")
     config.read(cfg_path, encoding='utf-8')
     return config
 
@@ -76,9 +76,9 @@ try:
             k, v = mwt_storage_row
             mwt_dict[k] = v
 except FileNotFoundError:
-    fmf_logging.log_error(f"CSV not found on startup: {filepath}\n")
+    fmf_logging.log_error(f"CSV not found on startup: {filepath}")
 except Exception as e:
-    fmf_logging.log_error(f"CSV read failed on startup path={filepath}: {e}\n")
+    fmf_logging.log_error(f"CSV read failed on startup path={filepath}: {e}")
 print(mwt_dict)
 
 galil = gclib.py()
@@ -102,7 +102,7 @@ class MoveCarriage(ctk.CTk):
         # - exception handler if program cannot connect to carriage
         except gclib.GclibError as e:
             print('Unexpected GclibError:', e)
-            fmf_logging.log_error(f"Serial connect failed [{_serial_port},{_serial_baud}]: {e}\n")
+            fmf_logging.log_error(f"Serial connect failed [{_serial_port},{_serial_baud}]: {e}")
 
         # - code runs only if program connects to carriage successfully
         else:
@@ -677,7 +677,7 @@ class MoveCarriage(ctk.CTk):
             del c
             fmf_logging.write_log("Carriage stopped!")
         except Exception as e:
-            fmf_logging.log_error(f"stop_carriage error: {e}\n")
+            fmf_logging.log_error(f"stop_carriage error: {e}")
 
     # -- close carriage connection and exit program window
     def quit_carriage(self):
@@ -686,7 +686,7 @@ class MoveCarriage(ctk.CTk):
         try:
             galil.GClose()
         except Exception as e:
-            fmf_logging.log_error(f"quit_carriage close error: {e}\n")
+            fmf_logging.log_error(f"quit_carriage close error: {e}")
         self.destroy()
 
     @staticmethod
@@ -701,7 +701,7 @@ class MoveCarriage(ctk.CTk):
                 galil.GOpen(_serial_port + ' --baud ' + _serial_baud)  # change to COM port used by carriage
                 print(galil.GInfo())
             except gclib.GclibError as e:
-                fmf_logging.log_error(f"Serial connect failed [{_serial_port},{_serial_baud}]: {e}\n")
+                fmf_logging.log_error(f"Serial connect failed [{_serial_port},{_serial_baud}]: {e}")
 
     # TODO: motion complete after target - position = 0?
     # -- update carriage positions and stop codes
@@ -740,7 +740,7 @@ class MoveCarriage(ctk.CTk):
             self.csv_generate()
             self.after(10, self.update_carriage)
         except Exception as e:
-            fmf_logging.log_error(f"update_carriage failed: {e}\n")
+            fmf_logging.log_error(f"update_carriage failed: {e}")
             return
         # self.after(10, fmf_logging.write_log("Carriage updated"))
 
@@ -776,10 +776,10 @@ class MoveCarriage(ctk.CTk):
                 c('PAC=' + str(move_encoder))
                 c('BGC')
             else:
-                fmf_logging.log_error(f"move_axis invalid axis: {axis}\n")
+                fmf_logging.log_error(f"move_axis invalid axis: {axis}")
             del c
         except Exception as e:
-            fmf_logging.log_error(f"move_axis error axis={axis} target={move_target}: {e}\n")
+            fmf_logging.log_error(f"move_axis error axis={axis} target={move_target}: {e}")
 
     # -- set axis position target value to actual value
     # noinspection PyTypeChecker
@@ -804,10 +804,10 @@ class MoveCarriage(ctk.CTk):
                 mwt_dict |= {'z_actual': set_target}
                 fmf_logging.write_log("Z position is now: " + set_target)
             else:
-                fmf_logging.log_error(f"set_axis invalid axis: {axis}\n")
+                fmf_logging.log_error(f"set_axis invalid axis: {axis}")
             del c
         except Exception as e:
-            fmf_logging.log_error(f"set_axis error axis={axis} target={set_target}: {e}\n")
+            fmf_logging.log_error(f"set_axis error axis={axis} target={set_target}: {e}")
         self.csv_generate()
 
     # -- enables the set limits button if the adjacent checkbox is checked
@@ -843,7 +843,7 @@ class MoveCarriage(ctk.CTk):
             self.csv_generate()
             del c
         except Exception as e:
-            fmf_logging.log_error(f"set_limits error: {e}\n")
+            fmf_logging.log_error(f"set_limits error: {e}")
 
     # -- enables the set SAD button if the adjacent checkbox is checked
     def enable_button_set_SAD(self):
@@ -886,7 +886,7 @@ class MoveCarriage(ctk.CTk):
             self.csv_generate()
             del c
         except Exception as e:
-            fmf_logging.log_error(f"set_SAD error: {e}\n")
+            fmf_logging.log_error(f"set_SAD error: {e}")
 
     # -- enables the set PID button if the adjacent checkbox is checked
     def enable_button_set_PID(self):
@@ -929,7 +929,7 @@ class MoveCarriage(ctk.CTk):
             self.csv_generate()
             del c
         except Exception as e:
-            fmf_logging.log_error(f"set_PID error: {e}\n")
+            fmf_logging.log_error(f"set_PID error: {e}")
 
     # - csv functions
     # -- recalls saved limits from csv and outputs them in the log
@@ -1043,4 +1043,4 @@ if __name__ == "__main__":
     try:
         app.mainloop()
     except Exception as e:
-        fmf_logging.log_error(f"mainloop error: {e}\n")
+        fmf_logging.log_error(f"mainloop error: {e}")
