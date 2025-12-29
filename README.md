@@ -38,35 +38,20 @@ pyinstaller --clean --noconfirm carriage_gui.spec
 This will output the executable to the `dist` directory.
 
 ### Runtime configuration
-- The app reads settings from `config.ini` placed next to the executable (bundled by default).
-- You can override the config path at runtime by setting the `CARRIAGE_CONFIG` environment variable to an absolute or relative path.
+- The app reads settings from `config.yaml` placed next to the executable (bundled by default).
+- You can override the config path at runtime (to use a different config file) by setting the `CARRIAGE_CONFIG` environment variable to an absolute or relative path.
   For example, before running the bundled executable:
 
   On Windows (Command Prompt):
   ```
-  set CARRIAGE_CONFIG=C:\path\to\your\custom_config.ini
+  set CARRIAGE_CONFIG=C:\path\to\your\custom_config.yaml
   dist\carriage_gui\carriage_gui.exe
   ```
 
   On MacOS/Linux (bash):
   ```
-  export CARRIAGE_CONFIG=/path/to/your/custom_config.ini
+  export CARRIAGE_CONFIG=/path/to/your/custom_config.yaml
   ./dist/carriage_gui/carriage_gui
   ```
 
-Config options:
-```
-[serial]
-port = COM2
-baud = 19200
-
-[files]
-mwt_storage = mwt_storage.csv
-error_log = mwt_error_log.txt
-
-[ui]
-appearance = system | light | dark
-color = blue | green | dark-blue | sweetkind
-```
-
-- Relative paths are resolved relative to the app’s bundle folder; absolute paths are used as-is.
+- Relative paths are resolved relative to the app's bundle folder; absolute paths are used as-is.

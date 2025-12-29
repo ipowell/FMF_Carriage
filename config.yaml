@@ -1,0 +1,17 @@
+serial:
+  port: COM2
+
+  # baud defaults to 19200, unlikely to need to change
+  baud: 19200
+
+files:
+  mwt_storage: mwt_storage.csv
+  error_log: mwt_error_log.txt
+
+ui:
+  # options: system | light | dark
+  appearance: system
+
+  # options: blue | green | dark-blue | sweetkind
+  color: blue
+

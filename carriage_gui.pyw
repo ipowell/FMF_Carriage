@@ -12,12 +12,12 @@ from threading import *  # package: allows tkinter to have multiple threads to r
 import fmf_logging  # module: allows the program to output errors and exceptions to the log file
 import os  # package: used to access user's OS for files and machine time
 import sys  # package: used to access user's OS for files
-import configparser  # module: load INI configuration at runtime
+import yaml  # module: load YAML configuration at runtime
 
 # install global exception hook to capture unhandled errors
 def _excepthook(exc_type, exc, tb):
     import traceback
-    fmf_logging.log_error("Unhandled exception:\n" + "".join(traceback.format_exception(exc_type, exc, tb)) + "")
+    fmf_logging.log_error("Unhandled exception:\n" + "".join(traceback.format_exception(exc_type, exc, tb)))
 sys.excepthook = _excepthook
 
 # gets absolute path to resource (icon), works for dev and for PyInstaller
@@ -28,19 +28,21 @@ def resource_path(relative_path):
 
 # configuration loading (supports env var override CARRIAGE_CONFIG)
 def _load_config():
-    config = configparser.ConfigParser()
     env_path = os.environ.get('CARRIAGE_CONFIG')
     if env_path:
         cfg_path = os.path.abspath(os.path.expanduser(env_path))
     else:
-        cfg_path = resource_path('config.ini')
+        cfg_path = resource_path('config.yaml')
     try:
         if not os.path.exists(cfg_path):
             fmf_logging.log_error(f"Config file not found: {cfg_path}")
+            return {}
+        with open(cfg_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+            return config if config else {}
     except Exception as e:
-        fmf_logging.log_error(f"Config path check failed: {e}")
-    config.read(cfg_path, encoding='utf-8')
-    return config
+        fmf_logging.log_error(f"Config load failed: {e}")
+        return {}
 
 _config = _load_config()
 
@@ -53,16 +55,16 @@ def _resolve_path(path_value: str) -> str:
     return resource_path(expanded)
 
 # configured serial defaults
-_serial_port = _config.get('serial', 'port', fallback='COM2')
-_serial_baud = _config.get('serial', 'baud', fallback='19200')
+_serial_port = _config.get('serial', {}).get('port', 'COM2')
+_serial_baud = str(_config.get('serial', {}).get('baud', '19200'))
 
 # configured file paths
-_csv_path_cfg = _config.get('files', 'mwt_storage', fallback='mwt_storage.csv')
-_log_path_cfg = _config.get('files', 'error_log', fallback='mwt_error_log.txt')
+_csv_path_cfg = _config.get('files', {}).get('mwt_storage', 'mwt_storage.csv')
+_log_path_cfg = _config.get('files', {}).get('error_log', 'mwt_error_log.txt')
 
 # UI appearance and color
-ctk.set_appearance_mode(_config.get('ui', 'appearance', fallback='system').capitalize())  # Modes: "system", "dark", "light"
-ctk.set_default_color_theme(_config.get('ui', 'color', fallback='blue'))  # Themes: "blue", "green", "dark-blue", "sweetkind"
+ctk.set_appearance_mode(_config.get('ui', {}).get('appearance', 'system').capitalize())  # Modes: "system", "dark", "light"
+ctk.set_default_color_theme(_config.get('ui', {}).get('color', 'blue'))  # Themes: "blue", "green", "dark-blue", "sweetkind"
 
 # resolve and open CSV; set error log path
 filepath = _resolve_path(_csv_path_cfg)
