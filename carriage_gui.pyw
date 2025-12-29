@@ -14,6 +14,12 @@ import os  # package: used to access user's OS for files and machine time
 import sys  # package: used to access user's OS for files
 import configparser  # module: load INI configuration at runtime
 
+# install global exception hook to capture unhandled errors
+def _excepthook(exc_type, exc, tb):
+    import traceback
+    fmf_logging.log_error("Unhandled exception:\n" + "".join(traceback.format_exception(exc_type, exc, tb)) + "\n")
+sys.excepthook = _excepthook
+
 # gets absolute path to resource (icon), works for dev and for PyInstaller
 def resource_path(relative_path):
     base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(__file__)))
@@ -28,6 +34,11 @@ def _load_config():
         cfg_path = os.path.abspath(os.path.expanduser(env_path))
     else:
         cfg_path = resource_path('config.ini')
+    try:
+        if not os.path.exists(cfg_path):
+            fmf_logging.log_error(f"Config file not found: {cfg_path}\n")
+    except Exception as e:
+        fmf_logging.log_error(f"Config path check failed: {e}\n")
     config.read(cfg_path, encoding='utf-8')
     return config
 
@@ -55,12 +66,19 @@ ctk.set_default_color_theme(_config.get('ui', 'color', fallback='blue'))  # Them
 
 # resolve and open CSV; set error log path
 filepath = _resolve_path(_csv_path_cfg)
-mwt_storage_reader = csv.reader(open(filepath, 'r'))
-fmf_logging.set_error_log_file(_resolve_path(_log_path_cfg))
+resolved_log_path = _resolve_path(_log_path_cfg)
+fmf_logging.set_error_log_file(resolved_log_path)
 mwt_dict = {}
-for mwt_storage_row in mwt_storage_reader:
-    k, v = mwt_storage_row
-    mwt_dict[k] = v
+try:
+    with open(filepath, 'r') as _csv_file:
+        mwt_storage_reader = csv.reader(_csv_file)
+        for mwt_storage_row in mwt_storage_reader:
+            k, v = mwt_storage_row
+            mwt_dict[k] = v
+except FileNotFoundError:
+    fmf_logging.log_error(f"CSV not found on startup: {filepath}\n")
+except Exception as e:
+    fmf_logging.log_error(f"CSV read failed on startup path={filepath}: {e}\n")
 print(mwt_dict)
 
 galil = gclib.py()
@@ -84,6 +102,7 @@ class MoveCarriage(ctk.CTk):
         # - exception handler if program cannot connect to carriage
         except gclib.GclibError as e:
             print('Unexpected GclibError:', e)
+            fmf_logging.log_error(f"Serial connect failed [{_serial_port},{_serial_baud}]: {e}\n")
 
         # - code runs only if program connects to carriage successfully
         else:
@@ -652,16 +671,22 @@ class MoveCarriage(ctk.CTk):
     # - carriage functions
     # -- stop carriage move execution and freeze actual position values
     def stop_carriage(self):
-        c = galil.GCommand
-        c('AB')
-        del c
-        fmf_logging.write_log("Carriage stopped!")
+        try:
+            c = galil.GCommand
+            c('AB')
+            del c
+            fmf_logging.write_log("Carriage stopped!")
+        except Exception as e:
+            fmf_logging.log_error(f"stop_carriage error: {e}\n")
 
     # -- close carriage connection and exit program window
     def quit_carriage(self):
         self.stop_carriage()
         print("Connection closing, goodbye!")
-        galil.GClose()
+        try:
+            galil.GClose()
+        except Exception as e:
+            fmf_logging.log_error(f"quit_carriage close error: {e}\n")
         self.destroy()
 
     @staticmethod
@@ -672,44 +697,51 @@ class MoveCarriage(ctk.CTk):
         else:
             status = "Connected"
             print('gclib version:', galil.GVersion())  # prints installed gclib version
-            galil.GOpen(_serial_port + ' --baud ' + _serial_baud)  # change to COM port used by carriage
-            print(galil.GInfo())  # prints connection information for carriage
+            try:
+                galil.GOpen(_serial_port + ' --baud ' + _serial_baud)  # change to COM port used by carriage
+                print(galil.GInfo())
+            except gclib.GclibError as e:
+                fmf_logging.log_error(f"Serial connect failed [{_serial_port},{_serial_baud}]: {e}\n")
 
     # TODO: motion complete after target - position = 0?
     # -- update carriage positions and stop codes
     # noinspection PyTypeChecker
     def update_carriage(self):
-        global mwt_dict
-        c = galil.GCommand
-        x_pos = float(c('TPA')) / 40
-        x_pos_str = str(x_pos)
-        x_pos_round_str = str("%.1f" % x_pos)
-        y_pos = float(c('TPB')) / 40
-        y_pos_str = str(y_pos)
-        y_pos_round_str = str("%.1f" % y_pos)
-        z_pos = float(c('TPC')) / 40
-        z_pos_str = str(z_pos)
-        z_pos_round_str = str("%.1f" % z_pos)
+        try:
+            global mwt_dict
+            c = galil.GCommand
+            x_pos = float(c('TPA')) / 40
+            x_pos_str = str(x_pos)
+            x_pos_round_str = str("%.1f" % x_pos)
+            y_pos = float(c('TPB')) / 40
+            y_pos_str = str(y_pos)
+            y_pos_round_str = str("%.1f" % y_pos)
+            z_pos = float(c('TPC')) / 40
+            z_pos_str = str(z_pos)
+            z_pos_round_str = str("%.1f" % z_pos)
 
-        x_sc = str(c('SCA'))
-        y_sc = str(c('SCB'))
-        z_sc = str(c('SCC'))
+            x_sc = str(c('SCA'))
+            y_sc = str(c('SCB'))
+            z_sc = str(c('SCC'))
 
-        if not (x_sc and y_sc and z_sc):
-            fmf_logging.log_error(f"Missing stop code: x={x_sc}, y={y_sc}, z={z_sc}")
-        
-        self.x_actual.set(x_pos_round_str)
-        self.y_actual.set(y_pos_round_str)
-        self.z_actual.set(z_pos_round_str)
-        self.status_codes.set(f"{x_sc}, {y_sc}, {z_sc}")
-        mwt_dict |= {'x_actual': x_pos_str}
-        mwt_dict |= {'y_actual': y_pos_str}
-        mwt_dict |= {'z_actual': z_pos_str}
-        mwt_dict |= {'x_stop_code': x_sc}
-        mwt_dict |= {'y_stop_code': y_sc}
-        mwt_dict |= {'z_stop_code': z_sc}
-        self.csv_generate()
-        self.after(10, self.update_carriage)
+            if not (x_sc and y_sc and z_sc):
+                fmf_logging.log_error(f"Missing stop code: x={x_sc}, y={y_sc}, z={z_sc}")
+
+            self.x_actual.set(x_pos_round_str)
+            self.y_actual.set(y_pos_round_str)
+            self.z_actual.set(z_pos_round_str)
+            self.status_codes.set(f"{x_sc}, {y_sc}, {z_sc}")
+            mwt_dict |= {'x_actual': x_pos_str}
+            mwt_dict |= {'y_actual': y_pos_str}
+            mwt_dict |= {'z_actual': z_pos_str}
+            mwt_dict |= {'x_stop_code': x_sc}
+            mwt_dict |= {'y_stop_code': y_sc}
+            mwt_dict |= {'z_stop_code': z_sc}
+            self.csv_generate()
+            self.after(10, self.update_carriage)
+        except Exception as e:
+            fmf_logging.log_error(f"update_carriage failed: {e}\n")
+            return
         # self.after(10, fmf_logging.write_log("Carriage updated"))
 
     # -- create thread to constantly update carriage position and stop codes
@@ -721,54 +753,61 @@ class MoveCarriage(ctk.CTk):
     # noinspection PyTypeChecker
     def move_axis(self, axis, move_target, axis_limit_fwd, axis_limit_rev):
         app.bind_all("<1>", lambda event: event.widget.focus_set())
-        move_encoder = str(float(move_target) * 40)
-        c = galil.GCommand
-        if (float(axis_limit_rev.get()) > float(move_target) or
-                float(move_target) > float(axis_limit_fwd.get())):
-            fmf_logging.write_log("Move is beyond limits!")
-        elif axis == "X":
-            self.x_target.set(float(move_target))
-            fmf_logging.write_log("Move initiated, target is X=" + move_target)
-            c('PAA=' + str(move_encoder))
-            c('BGA')
-        elif axis == "Y":
-            self.y_target.set(float(move_target))
-            fmf_logging.write_log("Move initiated, target is Y=" + move_target)
-            c('PAB=' + str(move_encoder))
-            c('BGB')
-        elif axis == "Z":
-            self.z_target.set(float(move_target))
-            fmf_logging.write_log("Move initiated, target is Z=" + move_target)
-            c('PAC=' + str(move_encoder))
-            c('BGC')
-        else:
-            fmf_logging.write_log("Moving error!")
-        del c
+        try:
+            move_encoder = str(float(move_target) * 40)
+            c = galil.GCommand
+            if (float(axis_limit_rev.get()) > float(move_target) or
+                    float(move_target) > float(axis_limit_fwd.get())):
+                fmf_logging.log_error(f"Move is beyond limits! limit_rev={axis_limit_rev.get()} target={move_target} limit_fwd={axis_limit_fwd.get()}")
+
+            elif axis == "X":
+                self.x_target.set(float(move_target))
+                fmf_logging.write_log("Move initiated, target is X=" + move_target)
+                c('PAA=' + str(move_encoder))
+                c('BGA')
+            elif axis == "Y":
+                self.y_target.set(float(move_target))
+                fmf_logging.write_log("Move initiated, target is Y=" + move_target)
+                c('PAB=' + str(move_encoder))
+                c('BGB')
+            elif axis == "Z":
+                self.z_target.set(float(move_target))
+                fmf_logging.write_log("Move initiated, target is Z=" + move_target)
+                c('PAC=' + str(move_encoder))
+                c('BGC')
+            else:
+                fmf_logging.log_error(f"move_axis invalid axis: {axis}\n")
+            del c
+        except Exception as e:
+            fmf_logging.log_error(f"move_axis error axis={axis} target={move_target}: {e}\n")
 
     # -- set axis position target value to actual value
     # noinspection PyTypeChecker
     def set_axis(self, axis, set_target):
         global mwt_dict
-        c = galil.GCommand
-        value_encoder = str(float(set_target) * 40)  # e.g. 40 encoder counts per mm (230*40=9200)
-        if axis == "X":
-            c('DPA=' + str(value_encoder))
-            self.x_target.set(float(set_target))
-            mwt_dict |= {'x_actual': set_target}
-            fmf_logging.write_log("X position is now: " + set_target)
-        elif axis == "Y":
-            c('DPB=' + str(value_encoder))
-            self.y_target.set(float(set_target))
-            mwt_dict |= {'y_actual': set_target}
-            fmf_logging.write_log("Y position is now: " + set_target)
-        elif axis == "Z":
-            c('DPC=' + str(value_encoder))
-            self.z_target.set(float(set_target))
-            mwt_dict |= {'z_actual': set_target}
-            fmf_logging.write_log("Z position is now: " + set_target)
-        else:
-            fmf_logging.write_log("Set axis error!")
-        del c
+        try:
+            c = galil.GCommand
+            value_encoder = str(float(set_target) * 40)  # e.g. 40 encoder counts per mm (230*40=9200)
+            if axis == "X":
+                c('DPA=' + str(value_encoder))
+                self.x_target.set(float(set_target))
+                mwt_dict |= {'x_actual': set_target}
+                fmf_logging.write_log("X position is now: " + set_target)
+            elif axis == "Y":
+                c('DPB=' + str(value_encoder))
+                self.y_target.set(float(set_target))
+                mwt_dict |= {'y_actual': set_target}
+                fmf_logging.write_log("Y position is now: " + set_target)
+            elif axis == "Z":
+                c('DPC=' + str(value_encoder))
+                self.z_target.set(float(set_target))
+                mwt_dict |= {'z_actual': set_target}
+                fmf_logging.write_log("Z position is now: " + set_target)
+            else:
+                fmf_logging.log_error(f"set_axis invalid axis: {axis}\n")
+            del c
+        except Exception as e:
+            fmf_logging.log_error(f"set_axis error axis={axis} target={set_target}: {e}\n")
         self.csv_generate()
 
     # -- enables the set limits button if the adjacent checkbox is checked
@@ -778,30 +817,33 @@ class MoveCarriage(ctk.CTk):
     # -- takes user input for all limits entries and stores those values
     def set_limits(self):
         global mwt_dict
-        c = galil.GCommand
-        c('FLA=' + str(float(self.entry_x_limit_fwd.get()) * 40))
-        c('BLA=' + str(float(self.entry_x_limit_rev.get()) * 40))
-        c('FLB=' + str(float(self.entry_y_limit_fwd.get()) * 40))
-        c('BLB=' + str(float(self.entry_y_limit_rev.get()) * 40))
-        c('FLC=' + str(float(self.entry_z_limit_fwd.get()) * 40))
-        c('BLC=' + str(float(self.entry_z_limit_rev.get()) * 40))
-        self.x_limit_fwd.set(self.entry_x_limit_fwd.get())
-        self.x_limit_fwd.set(self.entry_x_limit_fwd.get())
-        self.x_limit_rev.set(self.entry_x_limit_rev.get())
-        self.y_limit_fwd.set(self.entry_y_limit_fwd.get())
-        self.y_limit_rev.set(self.entry_y_limit_rev.get())
-        self.z_limit_fwd.set(self.entry_z_limit_fwd.get())
-        self.z_limit_rev.set(self.entry_z_limit_rev.get())
-        mwt_dict |= {'x_fwd_limit': self.x_limit_fwd.get()}
-        mwt_dict |= {'x_rev_limit': self.x_limit_rev.get()}
-        mwt_dict |= {'y_fwd_limit': self.y_limit_fwd.get()}
-        mwt_dict |= {'y_rev_limit': self.y_limit_rev.get()}
-        mwt_dict |= {'z_fwd_limit': self.z_limit_fwd.get()}
-        mwt_dict |= {'z_rev_limit': self.z_limit_rev.get()}
-        self.checkbox_unlock_limits_status.set(0)
-        self.button_set_limits.configure(state="disabled")
-        self.csv_generate()
-        del c
+        try:
+            c = galil.GCommand
+            c('FLA=' + str(float(self.entry_x_limit_fwd.get()) * 40))
+            c('BLA=' + str(float(self.entry_x_limit_rev.get()) * 40))
+            c('FLB=' + str(float(self.entry_y_limit_fwd.get()) * 40))
+            c('BLB=' + str(float(self.entry_y_limit_rev.get()) * 40))
+            c('FLC=' + str(float(self.entry_z_limit_fwd.get()) * 40))
+            c('BLC=' + str(float(self.entry_z_limit_rev.get()) * 40))
+            self.x_limit_fwd.set(self.entry_x_limit_fwd.get())
+            self.x_limit_fwd.set(self.entry_x_limit_fwd.get())
+            self.x_limit_rev.set(self.entry_x_limit_rev.get())
+            self.y_limit_fwd.set(self.entry_y_limit_fwd.get())
+            self.y_limit_rev.set(self.entry_y_limit_rev.get())
+            self.z_limit_fwd.set(self.entry_z_limit_fwd.get())
+            self.z_limit_rev.set(self.entry_z_limit_rev.get())
+            mwt_dict |= {'x_fwd_limit': self.x_limit_fwd.get()}
+            mwt_dict |= {'x_rev_limit': self.x_limit_rev.get()}
+            mwt_dict |= {'y_fwd_limit': self.y_limit_fwd.get()}
+            mwt_dict |= {'y_rev_limit': self.y_limit_rev.get()}
+            mwt_dict |= {'z_fwd_limit': self.z_limit_fwd.get()}
+            mwt_dict |= {'z_rev_limit': self.z_limit_rev.get()}
+            self.checkbox_unlock_limits_status.set(0)
+            self.button_set_limits.configure(state="disabled")
+            self.csv_generate()
+            del c
+        except Exception as e:
+            fmf_logging.log_error(f"set_limits error: {e}\n")
 
     # -- enables the set SAD button if the adjacent checkbox is checked
     def enable_button_set_SAD(self):
@@ -810,38 +852,41 @@ class MoveCarriage(ctk.CTk):
     # -- used to save all current speed, accel, decel carriage attributes
     def set_SAD(self):
         global mwt_dict
-        c = galil.GCommand
-        c('SPA=' + str(int(self.entry_speed_x.get())))
-        c('SPB=' + str(int(self.entry_speed_y.get())))
-        c('SPC=' + str(int(self.entry_speed_z.get())))
-        c('ACA=' + str(int(self.entry_speed_x.get())))
-        c('ACB=' + str(int(self.entry_speed_y.get())))
-        c('ACC=' + str(int(self.entry_speed_z.get())))
-        c('DCA=' + str(int(self.entry_speed_x.get())))
-        c('DCB=' + str(int(self.entry_speed_y.get())))
-        c('DCC=' + str(int(self.entry_speed_z.get())))
-        self.speed_x.set(self.entry_speed_x.get())
-        self.speed_y.set(self.entry_speed_y.get())
-        self.speed_z.set(self.entry_speed_z.get())
-        self.accel_x.set(self.entry_accel_x.get())
-        self.accel_y.set(self.entry_accel_y.get())
-        self.accel_z.set(self.entry_accel_z.get())
-        self.decel_x.set(self.entry_decel_x.get())
-        self.decel_y.set(self.entry_decel_y.get())
-        self.decel_z.set(self.entry_decel_z.get())
-        mwt_dict |= {'sp_x': self.speed_x.get()}
-        mwt_dict |= {'sp_y': self.speed_y.get()}
-        mwt_dict |= {'sp_z': self.speed_z.get()}
-        mwt_dict |= {'ac_x': self.accel_x.get()}
-        mwt_dict |= {'ac_y': self.accel_y.get()}
-        mwt_dict |= {'ac_z': self.accel_z.get()}
-        mwt_dict |= {'dc_x': self.decel_x.get()}
-        mwt_dict |= {'dc_y': self.decel_y.get()}
-        mwt_dict |= {'dc_z': self.decel_z.get()}
-        self.checkbox_unlock_SAD_status.set(0)
-        self.button_set_SAD.configure(state="disabled")
-        self.csv_generate()
-        del c
+        try:
+            c = galil.GCommand
+            c('SPA=' + str(int(self.entry_speed_x.get())))
+            c('SPB=' + str(int(self.entry_speed_y.get())))
+            c('SPC=' + str(int(self.entry_speed_z.get())))
+            c('ACA=' + str(int(self.entry_speed_x.get())))
+            c('ACB=' + str(int(self.entry_speed_y.get())))
+            c('ACC=' + str(int(self.entry_speed_z.get())))
+            c('DCA=' + str(int(self.entry_speed_x.get())))
+            c('DCB=' + str(int(self.entry_speed_y.get())))
+            c('DCC=' + str(int(self.entry_speed_z.get())))
+            self.speed_x.set(self.entry_speed_x.get())
+            self.speed_y.set(self.entry_speed_y.get())
+            self.speed_z.set(self.entry_speed_z.get())
+            self.accel_x.set(self.entry_accel_x.get())
+            self.accel_y.set(self.entry_accel_y.get())
+            self.accel_z.set(self.entry_accel_z.get())
+            self.decel_x.set(self.entry_decel_x.get())
+            self.decel_y.set(self.entry_decel_y.get())
+            self.decel_z.set(self.entry_decel_z.get())
+            mwt_dict |= {'sp_x': self.speed_x.get()}
+            mwt_dict |= {'sp_y': self.speed_y.get()}
+            mwt_dict |= {'sp_z': self.speed_z.get()}
+            mwt_dict |= {'ac_x': self.accel_x.get()}
+            mwt_dict |= {'ac_y': self.accel_y.get()}
+            mwt_dict |= {'ac_z': self.accel_z.get()}
+            mwt_dict |= {'dc_x': self.decel_x.get()}
+            mwt_dict |= {'dc_y': self.decel_y.get()}
+            mwt_dict |= {'dc_z': self.decel_z.get()}
+            self.checkbox_unlock_SAD_status.set(0)
+            self.button_set_SAD.configure(state="disabled")
+            self.csv_generate()
+            del c
+        except Exception as e:
+            fmf_logging.log_error(f"set_SAD error: {e}\n")
 
     # -- enables the set PID button if the adjacent checkbox is checked
     def enable_button_set_PID(self):
@@ -850,38 +895,41 @@ class MoveCarriage(ctk.CTk):
     # -- used to save all current proportional, integral, derivative carriage attributes
     def set_PID(self):
         global mwt_dict
-        c = galil.GCommand
-        c('KPA=' + str(int(self.entry_kp_x.get())))
-        c('KPB=' + str(float(self.entry_kp_y.get())))
-        c('KPC=' + str(int(self.entry_kp_z.get())))
-        c('KIA=' + str(int(self.entry_ki_x.get())))
-        c('KIB=' + str(float(self.entry_ki_y.get())))
-        c('KIC=' + str(int(self.entry_ki_z.get())))
-        c('KDA=' + str(int(self.entry_kd_x.get())))
-        c('KDB=' + str(float(self.entry_kd_y.get())))
-        c('KDC=' + str(int(self.entry_kd_z.get())))
-        self.kp_x.set(self.entry_kp_x.get())
-        self.kp_y.set(self.entry_kp_y.get())
-        self.kp_z.set(self.entry_kp_z.get())
-        self.ki_x.set(self.entry_ki_x.get())
-        self.ki_y.set(self.entry_ki_y.get())
-        self.ki_z.set(self.entry_ki_z.get())
-        self.kd_x.set(self.entry_kd_x.get())
-        self.kd_y.set(self.entry_kd_y.get())
-        self.kd_z.set(self.entry_kd_z.get())
-        mwt_dict |= {'kp_x': self.kp_x.get()}
-        mwt_dict |= {'kp_y': self.kp_y.get()}
-        mwt_dict |= {'kp_z': self.kp_z.get()}
-        mwt_dict |= {'ki_x': self.ki_x.get()}
-        mwt_dict |= {'ki_y': self.ki_y.get()}
-        mwt_dict |= {'ki_z': self.ki_z.get()}
-        mwt_dict |= {'kd_x': self.kd_x.get()}
-        mwt_dict |= {'kd_y': self.kd_y.get()}
-        mwt_dict |= {'kd_z': self.kd_z.get()}
-        self.checkbox_unlock_PID_status.set(0)
-        self.button_set_PID.configure(state="disabled")
-        self.csv_generate()
-        del c
+        try:
+            c = galil.GCommand
+            c('KPA=' + str(int(self.entry_kp_x.get())))
+            c('KPB=' + str(float(self.entry_kp_y.get())))
+            c('KPC=' + str(int(self.entry_kp_z.get())))
+            c('KIA=' + str(int(self.entry_ki_x.get())))
+            c('KIB=' + str(float(self.entry_ki_y.get())))
+            c('KIC=' + str(int(self.entry_ki_z.get())))
+            c('KDA=' + str(int(self.entry_kd_x.get())))
+            c('KDB=' + str(float(self.entry_kd_y.get())))
+            c('KDC=' + str(int(self.entry_kd_z.get())))
+            self.kp_x.set(self.entry_kp_x.get())
+            self.kp_y.set(self.entry_kp_y.get())
+            self.kp_z.set(self.entry_kp_z.get())
+            self.ki_x.set(self.entry_ki_x.get())
+            self.ki_y.set(self.entry_ki_y.get())
+            self.ki_z.set(self.entry_ki_z.get())
+            self.kd_x.set(self.entry_kd_x.get())
+            self.kd_y.set(self.entry_kd_y.get())
+            self.kd_z.set(self.entry_kd_z.get())
+            mwt_dict |= {'kp_x': self.kp_x.get()}
+            mwt_dict |= {'kp_y': self.kp_y.get()}
+            mwt_dict |= {'kp_z': self.kp_z.get()}
+            mwt_dict |= {'ki_x': self.ki_x.get()}
+            mwt_dict |= {'ki_y': self.ki_y.get()}
+            mwt_dict |= {'ki_z': self.ki_z.get()}
+            mwt_dict |= {'kd_x': self.kd_x.get()}
+            mwt_dict |= {'kd_y': self.kd_y.get()}
+            mwt_dict |= {'kd_z': self.kd_z.get()}
+            self.checkbox_unlock_PID_status.set(0)
+            self.button_set_PID.configure(state="disabled")
+            self.csv_generate()
+            del c
+        except Exception as e:
+            fmf_logging.log_error(f"set_PID error: {e}\n")
 
     # - csv functions
     # -- recalls saved limits from csv and outputs them in the log
@@ -959,10 +1007,13 @@ class MoveCarriage(ctk.CTk):
     @staticmethod
     def csv_generate():
         # with open('mwt_storage.csv', 'w', newline='') as csv_file:
-        with open(filepath, 'w', newline='') as csv_file:
-            writer = csv.writer(csv_file)
-            for key, value in mwt_dict.items():
-                writer.writerow([key, value])
+        try:
+            with open(filepath, 'w', newline='') as csv_file:
+                writer = csv.writer(csv_file)
+                for key, value in mwt_dict.items():
+                    writer.writerow([key, value])
+        except Exception as e:
+            fmf_logging.log_error(f"csv_generate failed path={filepath}: {e}")
         # self.checkbox_unlock_limits_status.set(0)
         # self.checkbox_unlock_SAD_status.set(0)
         # self.checkbox_unlock_PID_status.set(0)
@@ -975,14 +1026,21 @@ class MoveCarriage(ctk.CTk):
     def csv_recall(self):
         global mwt_dict
         # with open("mwt_storage.csv", "r") as file:
-        with open(filepath, "r") as file:
-            reader = csv.reader(file)
-            for row in reader:
-                print(','.join(row))
-        fmf_logging.write_log(mwt_dict)
+        try:
+            with open(filepath, "r") as file:
+                reader = csv.reader(file)
+                for row in reader:
+                    print(','.join(row))
+        except FileNotFoundError:
+            fmf_logging.log_error(f"csv_recall missing file: {filepath}")
+        except Exception as e:
+            fmf_logging.log_error(f"csv_recall failed path={filepath}: {e}")
 
 
 if __name__ == "__main__":
     fmf_logging.log_error("Beginning program")
     app = MoveCarriage()
-    app.mainloop()
+    try:
+        app.mainloop()
+    except Exception as e:
+        fmf_logging.log_error(f"mainloop error: {e}\n")
