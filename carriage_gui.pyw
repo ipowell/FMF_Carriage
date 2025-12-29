@@ -60,13 +60,100 @@ _serial_baud = str(_config.get('serial', {}).get('baud', '19200'))
 
 # configured file paths
 _csv_path_cfg = _config.get('files', {}).get('mwt_storage', 'mwt_storage.csv')
+_constants_path_cfg = _config.get('files', {}).get('mwt_constants', 'mwt_constants.yaml')
 _log_path_cfg = _config.get('files', {}).get('error_log', 'mwt_error_log.txt')
 
 # UI appearance and color
 ctk.set_appearance_mode(_config.get('ui', {}).get('appearance', 'system').capitalize())  # Modes: "system", "dark", "light"
 ctk.set_default_color_theme(_config.get('ui', {}).get('color', 'blue'))  # Themes: "blue", "green", "dark-blue", "sweetkind"
 
-# resolve and open CSV; set error log path
+# load constants from YAML (read once at startup)
+constants_filepath = _resolve_path(_constants_path_cfg)
+mwt_constants = {}
+
+def _get_constant(data_dict, key, default, path_description):
+    """Get a constant value and log error if using fallback."""
+    if key not in data_dict:
+        fmf_logging.log_error(f"Missing constant '{key}' in {path_description}, using fallback: {default}")
+        return default
+    return data_dict[key]
+
+try:
+    with open(constants_filepath, 'r', encoding='utf-8') as _constants_file:
+        constants_data = yaml.safe_load(_constants_file)
+        if not constants_data:
+            fmf_logging.log_error(f"Constants file is empty: {constants_filepath}")
+            constants_data = {}
+        
+        # Flatten nested structure to match old CSV key names
+        default_pos = constants_data.get('default_positions', {})
+        if 'default_positions' not in constants_data:
+            fmf_logging.log_error(f"Missing 'default_positions' section in constants file")
+        mwt_constants['default_x'] = _get_constant(default_pos, 'x', 20.0, 'default_positions')
+        mwt_constants['default_y'] = _get_constant(default_pos, 'y', 20.0, 'default_positions')
+        mwt_constants['default_z'] = _get_constant(default_pos, 'z', 20.0, 'default_positions')
+        
+        if 'default_stop_code' not in constants_data:
+            fmf_logging.log_error(f"Missing 'default_stop_code' in constants file")
+        mwt_constants['default_stop_code'] = constants_data.get('default_stop_code', 1)
+        
+        limits = constants_data.get('limits', {})
+        if 'limits' not in constants_data:
+            fmf_logging.log_error(f"Missing 'limits' section in constants file")
+        mwt_constants['x_fwd_limit'] = _get_constant(limits, 'x_fwd', 5000, 'limits')
+        mwt_constants['x_rev_limit'] = _get_constant(limits, 'x_rev', -500, 'limits')
+        mwt_constants['y_fwd_limit'] = _get_constant(limits, 'y_fwd', 1500, 'limits')
+        mwt_constants['y_rev_limit'] = _get_constant(limits, 'y_rev', -1500, 'limits')
+        mwt_constants['z_fwd_limit'] = _get_constant(limits, 'z_fwd', 1000, 'limits')
+        mwt_constants['z_rev_limit'] = _get_constant(limits, 'z_rev', -1, 'limits')
+        
+        speed = constants_data.get('speed', {})
+        if 'speed' not in constants_data:
+            fmf_logging.log_error(f"Missing 'speed' section in constants file")
+        mwt_constants['sp_x'] = _get_constant(speed, 'x', 2000, 'speed')
+        mwt_constants['sp_y'] = _get_constant(speed, 'y', 1500, 'speed')
+        mwt_constants['sp_z'] = _get_constant(speed, 'z', 300, 'speed')
+        
+        accel = constants_data.get('acceleration', {})
+        if 'acceleration' not in constants_data:
+            fmf_logging.log_error(f"Missing 'acceleration' section in constants file")
+        mwt_constants['ac_x'] = _get_constant(accel, 'x', 1024, 'acceleration')
+        mwt_constants['ac_y'] = _get_constant(accel, 'y', 1024, 'acceleration')
+        mwt_constants['ac_z'] = _get_constant(accel, 'z', 1024, 'acceleration')
+        
+        decel = constants_data.get('deceleration', {})
+        if 'deceleration' not in constants_data:
+            fmf_logging.log_error(f"Missing 'deceleration' section in constants file")
+        mwt_constants['dc_x'] = _get_constant(decel, 'x', 1024, 'deceleration')
+        mwt_constants['dc_y'] = _get_constant(decel, 'y', 1024, 'deceleration')
+        mwt_constants['dc_z'] = _get_constant(decel, 'z', 1024, 'deceleration')
+        
+        pid_kp = constants_data.get('pid_kp', {})
+        if 'pid_kp' not in constants_data:
+            fmf_logging.log_error(f"Missing 'pid_kp' section in constants file")
+        mwt_constants['kp_x'] = _get_constant(pid_kp, 'x', 2, 'pid_kp')
+        mwt_constants['kp_y'] = _get_constant(pid_kp, 'y', 4, 'pid_kp')
+        mwt_constants['kp_z'] = _get_constant(pid_kp, 'z', 4, 'pid_kp')
+        
+        pid_ki = constants_data.get('pid_ki', {})
+        if 'pid_ki' not in constants_data:
+            fmf_logging.log_error(f"Missing 'pid_ki' section in constants file")
+        mwt_constants['ki_x'] = _get_constant(pid_ki, 'x', 0.008, 'pid_ki')
+        mwt_constants['ki_y'] = _get_constant(pid_ki, 'y', 0.024, 'pid_ki')
+        mwt_constants['ki_z'] = _get_constant(pid_ki, 'z', 0.008, 'pid_ki')
+        
+        pid_kd = constants_data.get('pid_kd', {})
+        if 'pid_kd' not in constants_data:
+            fmf_logging.log_error(f"Missing 'pid_kd' section in constants file")
+        mwt_constants['kd_x'] = _get_constant(pid_kd, 'x', 500, 'pid_kd')
+        mwt_constants['kd_y'] = _get_constant(pid_kd, 'y', 100, 'pid_kd')
+        mwt_constants['kd_z'] = _get_constant(pid_kd, 'z', 1000, 'pid_kd')
+except FileNotFoundError:
+    fmf_logging.log_error(f"Constants file not found: {constants_filepath}")
+except Exception as e:
+    fmf_logging.log_error(f"Constants load failed path={constants_filepath}: {e}")
+
+# resolve and load runtime state from CSV; set error log path
 filepath = _resolve_path(_csv_path_cfg)
 resolved_log_path = _resolve_path(_log_path_cfg)
 fmf_logging.set_error_log_file(resolved_log_path)
@@ -81,7 +168,9 @@ except FileNotFoundError:
     fmf_logging.log_error(f"CSV not found on startup: {filepath}")
 except Exception as e:
     fmf_logging.log_error(f"CSV read failed on startup path={filepath}: {e}")
-print(mwt_dict)
+
+print(f"Constants: {mwt_constants}")
+print(f"Runtime state: {mwt_dict}")
 
 galil = gclib.py()
 status = "Disconnected"
@@ -113,39 +202,39 @@ class MoveCarriage(ctk.CTk):
 
             # -- "A"/x axis default settings
             c('SHA')  # sets servo motor "A" to x-axis
-            c('DPA=' + str(float(mwt_dict['x_actual']) * 40))  # x-axis last stored position
-            c('FLA=' + str(float(mwt_dict['x_fwd_limit']) * 40))  # x-axis last stored fwd limit
-            c('BLA=' + str(float(mwt_dict['x_rev_limit']) * 40))  # x-axis last stored rev limit
-            c('SPA=' + mwt_dict['sp_x'])  # x-axis speed, 2000 cts/sec
-            c('ACA=' + mwt_dict['ac_x'])  # x-axis acceleration, 1024 cts/sec
-            c('DCA=' + mwt_dict['dc_x'])  # x-axis deceleration, 1024 cts/sec
-            c('KPA=' + mwt_dict['kp_x'])  # x-axis proportional Kp, 4
-            c('KIA=' + mwt_dict['ki_x'])  # x-axis integral Ki, 0.008
-            c('KDA=' + mwt_dict['kd_x'])  # x-axis derivative Kd, 500
+            c('DPA=' + str(float(mwt_dict.get('x_actual', str(mwt_constants['default_x']))) * 40))  # x-axis last stored position
+            c('FLA=' + str(float(mwt_constants['x_fwd_limit']) * 40))  # x-axis last stored fwd limit
+            c('BLA=' + str(float(mwt_constants['x_rev_limit']) * 40))  # x-axis last stored rev limit
+            c('SPA=' + str(mwt_constants['sp_x']))  # x-axis speed, 2000 cts/sec
+            c('ACA=' + str(mwt_constants['ac_x']))  # x-axis acceleration, 1024 cts/sec
+            c('DCA=' + str(mwt_constants['dc_x']))  # x-axis deceleration, 1024 cts/sec
+            c('KPA=' + str(mwt_constants['kp_x']))  # x-axis proportional Kp, 4
+            c('KIA=' + str(mwt_constants['ki_x']))  # x-axis integral Ki, 0.008
+            c('KDA=' + str(mwt_constants['kd_x']))  # x-axis derivative Kd, 500
 
             # -- "B"/y axis default settings
             c('SHB')  # sets servo motor "B" to y-axis
-            c('DPB=' + str(float(mwt_dict['y_actual']) * 40))  # y-axis last stored position
-            c('FLB=' + str(float(mwt_dict['y_fwd_limit']) * 40))  # y-axis last stored fwd limit
-            c('BLB=' + str(float(mwt_dict['y_rev_limit']) * 40))  # y-axis last stored rev limit
-            c('SPB=' + mwt_dict['sp_y'])  # y-axis speed, 1500 cts/sec
-            c('ACB=' + mwt_dict['ac_y'])  # y-axis acceleration, 1024 cts/sec
-            c('DCB=' + mwt_dict['dc_y'])  # y-axis deceleration, 1024 cts/sec
-            c('KPB=' + mwt_dict['kp_y'])  # y-axis proportional Kp, 4
-            c('KIB=' + mwt_dict['ki_y'])  # y-axis integral Ki, 0.024
-            c('KDB=' + mwt_dict['kd_y'])  # y-axis derivative Kd, 100
+            c('DPB=' + str(float(mwt_dict.get('y_actual', str(mwt_constants['default_y']))) * 40))  # y-axis last stored position
+            c('FLB=' + str(float(mwt_constants['y_fwd_limit']) * 40))  # y-axis last stored fwd limit
+            c('BLB=' + str(float(mwt_constants['y_rev_limit']) * 40))  # y-axis last stored rev limit
+            c('SPB=' + str(mwt_constants['sp_y']))  # y-axis speed, 1500 cts/sec
+            c('ACB=' + str(mwt_constants['ac_y']))  # y-axis acceleration, 1024 cts/sec
+            c('DCB=' + str(mwt_constants['dc_y']))  # y-axis deceleration, 1024 cts/sec
+            c('KPB=' + str(mwt_constants['kp_y']))  # y-axis proportional Kp, 4
+            c('KIB=' + str(mwt_constants['ki_y']))  # y-axis integral Ki, 0.024
+            c('KDB=' + str(mwt_constants['kd_y']))  # y-axis derivative Kd, 100
 
             # -- "C"/z axis default settings
             c('SHC')  # sets servo motor "C" to z-axis
-            c('DPC=' + str(float(mwt_dict['z_actual']) * 40))  # z-axis last stored position
-            c('FLC=' + str(float(mwt_dict['z_fwd_limit']) * 40))  # z-axis last stored fwd limit
-            c('BLC=' + str(float(mwt_dict['z_rev_limit']) * 40))  # z-axis last stored rev limit
-            c('SPC=' + mwt_dict['sp_z'])  # z-axis speed, 300 cts/sec
-            c('ACC=' + mwt_dict['ac_z'])  # z-axis acceleration, 1024 cts/sec
-            c('DCC=' + mwt_dict['dc_z'])  # z-axis deceleration, 1024 cts/sec
-            c('KPC=' + mwt_dict['kp_z'])  # z-axis proportional Kp, 4
-            c('KIC=' + mwt_dict['ki_z'])  # z-axis integral Ki, 0.008
-            c('KDC=' + mwt_dict['kd_z'])  # z-axis derivative Kd, 1000
+            c('DPC=' + str(float(mwt_dict.get('z_actual', str(mwt_constants['default_z']))) * 40))  # z-axis last stored position
+            c('FLC=' + str(float(mwt_constants['z_fwd_limit']) * 40))  # z-axis last stored fwd limit
+            c('BLC=' + str(float(mwt_constants['z_rev_limit']) * 40))  # z-axis last stored rev limit
+            c('SPC=' + str(mwt_constants['sp_z']))  # z-axis speed, 300 cts/sec
+            c('ACC=' + str(mwt_constants['ac_z']))  # z-axis acceleration, 1024 cts/sec
+            c('DCC=' + str(mwt_constants['dc_z']))  # z-axis deceleration, 1024 cts/sec
+            c('KPC=' + str(mwt_constants['kp_z']))  # z-axis proportional Kp, 4
+            c('KIC=' + str(mwt_constants['ki_z']))  # z-axis integral Ki, 0.008
+            c('KDC=' + str(mwt_constants['kd_z']))  # z-axis derivative Kd, 1000
 
         # - configure gui
         # -- configure window
@@ -213,17 +302,17 @@ class MoveCarriage(ctk.CTk):
 
         # -- controls database values entry defaults
         self.x_target = tk.StringVar()
-        self.x_target.set(mwt_dict['x_actual'])
+        self.x_target.set(mwt_dict.get('x_actual', str(mwt_constants['default_x'])))
         self.y_target = tk.StringVar()
-        self.y_target.set(mwt_dict['y_actual'])
+        self.y_target.set(mwt_dict.get('y_actual', str(mwt_constants['default_y'])))
         self.z_target = tk.StringVar()
-        self.z_target.set(mwt_dict['z_actual'])
+        self.z_target.set(mwt_dict.get('z_actual', str(mwt_constants['default_z'])))
         self.x_actual = tk.StringVar()
-        self.x_actual.set(mwt_dict['x_actual'])
+        self.x_actual.set(mwt_dict.get('x_actual', str(mwt_constants['default_x'])))
         self.y_actual = tk.StringVar()
-        self.y_actual.set(mwt_dict['y_actual'])
+        self.y_actual.set(mwt_dict.get('y_actual', str(mwt_constants['default_y'])))
         self.z_actual = tk.StringVar()
-        self.z_actual.set(mwt_dict['z_actual'])
+        self.z_actual.set(mwt_dict.get('z_actual', str(mwt_constants['default_z'])))
 
         # -- controls labels
         self.label_position = ctk.CTkLabel(self.tabview_position.tab("Positions"), text="Carriage Position",
@@ -312,17 +401,17 @@ class MoveCarriage(ctk.CTk):
 
         # -- limits database values entry defaults
         self.x_limit_fwd = tk.IntVar()
-        self.x_limit_fwd.set(mwt_dict['x_fwd_limit'])
+        self.x_limit_fwd.set(mwt_constants['x_fwd_limit'])
         self.x_limit_rev = tk.IntVar()
-        self.x_limit_rev.set(mwt_dict['x_rev_limit'])
+        self.x_limit_rev.set(mwt_constants['x_rev_limit'])
         self.y_limit_fwd = tk.IntVar()
-        self.y_limit_fwd.set(mwt_dict['y_fwd_limit'])
+        self.y_limit_fwd.set(mwt_constants['y_fwd_limit'])
         self.y_limit_rev = tk.IntVar()
-        self.y_limit_rev.set(mwt_dict['y_rev_limit'])
+        self.y_limit_rev.set(mwt_constants['y_rev_limit'])
         self.z_limit_fwd = tk.IntVar()
-        self.z_limit_fwd.set(mwt_dict['z_fwd_limit'])
+        self.z_limit_fwd.set(mwt_constants['z_fwd_limit'])
         self.z_limit_rev = tk.IntVar()
-        self.z_limit_rev.set(mwt_dict['z_rev_limit'])
+        self.z_limit_rev.set(mwt_constants['z_rev_limit'])
         self.checkbox_unlock_limits_status = IntVar()
 
         # -- limits labels
@@ -389,23 +478,23 @@ class MoveCarriage(ctk.CTk):
 
         # -- attribute entry defaults (SP, AC, DC)
         self.speed_x = tk.IntVar()
-        self.speed_x.set(mwt_dict['sp_x'])
+        self.speed_x.set(mwt_constants['sp_x'])
         self.speed_y = tk.IntVar()
-        self.speed_y.set(mwt_dict['sp_y'])
+        self.speed_y.set(mwt_constants['sp_y'])
         self.speed_z = tk.IntVar()
-        self.speed_z.set(mwt_dict['sp_z'])
+        self.speed_z.set(mwt_constants['sp_z'])
         self.accel_x = tk.IntVar()
-        self.accel_x.set(mwt_dict['ac_x'])
+        self.accel_x.set(mwt_constants['ac_x'])
         self.accel_y = tk.IntVar()
-        self.accel_y.set(mwt_dict['ac_y'])
+        self.accel_y.set(mwt_constants['ac_y'])
         self.accel_z = tk.IntVar()
-        self.accel_z.set(mwt_dict['ac_z'])
+        self.accel_z.set(mwt_constants['ac_z'])
         self.decel_x = tk.IntVar()
-        self.decel_x.set(mwt_dict['dc_x'])
+        self.decel_x.set(mwt_constants['dc_x'])
         self.decel_y = tk.IntVar()
-        self.decel_y.set(mwt_dict['dc_y'])
+        self.decel_y.set(mwt_constants['dc_y'])
         self.decel_z = tk.IntVar()
-        self.decel_z.set(mwt_dict['dc_z'])
+        self.decel_z.set(mwt_constants['dc_z'])
         self.checkbox_unlock_SAD_status = IntVar()
 
         # -- attribute labels (SP, AC, DC)
@@ -486,23 +575,23 @@ class MoveCarriage(ctk.CTk):
 
         # -- attribute entry defaults (KP, KI, KD)
         self.kp_x = tk.IntVar()
-        self.kp_x.set(mwt_dict['kp_x'])
+        self.kp_x.set(mwt_constants['kp_x'])
         self.kp_y = tk.IntVar()
-        self.kp_y.set(mwt_dict['kp_y'])
+        self.kp_y.set(mwt_constants['kp_y'])
         self.kp_z = tk.IntVar()
-        self.kp_z.set(mwt_dict['kp_z'])
+        self.kp_z.set(mwt_constants['kp_z'])
         self.ki_x = tk.DoubleVar()
-        self.ki_x.set(mwt_dict['ki_x'])
+        self.ki_x.set(mwt_constants['ki_x'])
         self.ki_y = tk.DoubleVar()
-        self.ki_y.set(mwt_dict['ki_y'])
+        self.ki_y.set(mwt_constants['ki_y'])
         self.ki_z = tk.DoubleVar()
-        self.ki_z.set(mwt_dict['ki_z'])
+        self.ki_z.set(mwt_constants['ki_z'])
         self.kd_x = tk.IntVar()
-        self.kd_x.set(mwt_dict['kd_x'])
+        self.kd_x.set(mwt_constants['kd_x'])
         self.kd_y = tk.IntVar()
-        self.kd_y.set(mwt_dict['kd_y'])
+        self.kd_y.set(mwt_constants['kd_y'])
         self.kd_z = tk.IntVar()
-        self.kd_z.set(mwt_dict['kd_z'])
+        self.kd_z.set(mwt_constants['kd_z'])
         self.checkbox_unlock_PID_status = IntVar()
 
         # -- attribute labels (KP, KI, KD)
@@ -579,11 +668,11 @@ class MoveCarriage(ctk.CTk):
 
         # -- status codes database values entry defaults
         self.x_status_code = tk.IntVar()
-        self.x_status_code.set(mwt_dict['x_stop_code'])
+        self.x_status_code.set(mwt_dict.get('x_stop_code', str(mwt_constants['default_stop_code'])))
         self.y_status_code = tk.IntVar()
-        self.y_status_code.set(mwt_dict['y_stop_code'])
+        self.y_status_code.set(mwt_dict.get('y_stop_code', str(mwt_constants['default_stop_code'])))
         self.z_status_code = tk.IntVar()
-        self.z_status_code.set(mwt_dict['z_stop_code'])
+        self.z_status_code.set(mwt_dict.get('z_stop_code', str(mwt_constants['default_stop_code'])))
         self.status_codes = tk.StringVar()
         self.status_codes.set(f"{self.x_status_code.get()}, {self.y_status_code.get()}, {self.z_status_code.get()}")
 
@@ -818,7 +907,6 @@ class MoveCarriage(ctk.CTk):
 
     # -- takes user input for all limits entries and stores those values
     def set_limits(self):
-        global mwt_dict
         try:
             c = galil.GCommand
             c('FLA=' + str(float(self.entry_x_limit_fwd.get()) * 40))
@@ -834,15 +922,9 @@ class MoveCarriage(ctk.CTk):
             self.y_limit_rev.set(self.entry_y_limit_rev.get())
             self.z_limit_fwd.set(self.entry_z_limit_fwd.get())
             self.z_limit_rev.set(self.entry_z_limit_rev.get())
-            mwt_dict |= {'x_fwd_limit': self.x_limit_fwd.get()}
-            mwt_dict |= {'x_rev_limit': self.x_limit_rev.get()}
-            mwt_dict |= {'y_fwd_limit': self.y_limit_fwd.get()}
-            mwt_dict |= {'y_rev_limit': self.y_limit_rev.get()}
-            mwt_dict |= {'z_fwd_limit': self.z_limit_fwd.get()}
-            mwt_dict |= {'z_rev_limit': self.z_limit_rev.get()}
             self.checkbox_unlock_limits_status.set(0)
             self.button_set_limits.configure(state="disabled")
-            self.csv_generate()
+            fmf_logging.write_log(f"Limits set: X=[{self.x_limit_rev.get()}, {self.x_limit_fwd.get()}], Y=[{self.y_limit_rev.get()}, {self.y_limit_fwd.get()}], Z=[{self.z_limit_rev.get()}, {self.z_limit_fwd.get()}]")
             del c
         except Exception as e:
             fmf_logging.log_error(f"set_limits error: {e}")
@@ -853,7 +935,6 @@ class MoveCarriage(ctk.CTk):
 
     # -- used to save all current speed, accel, decel carriage attributes
     def set_SAD(self):
-        global mwt_dict
         try:
             c = galil.GCommand
             c('SPA=' + str(int(self.entry_speed_x.get())))
@@ -874,18 +955,9 @@ class MoveCarriage(ctk.CTk):
             self.decel_x.set(self.entry_decel_x.get())
             self.decel_y.set(self.entry_decel_y.get())
             self.decel_z.set(self.entry_decel_z.get())
-            mwt_dict |= {'sp_x': self.speed_x.get()}
-            mwt_dict |= {'sp_y': self.speed_y.get()}
-            mwt_dict |= {'sp_z': self.speed_z.get()}
-            mwt_dict |= {'ac_x': self.accel_x.get()}
-            mwt_dict |= {'ac_y': self.accel_y.get()}
-            mwt_dict |= {'ac_z': self.accel_z.get()}
-            mwt_dict |= {'dc_x': self.decel_x.get()}
-            mwt_dict |= {'dc_y': self.decel_y.get()}
-            mwt_dict |= {'dc_z': self.decel_z.get()}
             self.checkbox_unlock_SAD_status.set(0)
             self.button_set_SAD.configure(state="disabled")
-            self.csv_generate()
+            fmf_logging.write_log(f"SAD set: SP=[{self.speed_x.get()}, {self.speed_y.get()}, {self.speed_z.get()}], AC=[{self.accel_x.get()}, {self.accel_y.get()}, {self.accel_z.get()}], DC=[{self.decel_x.get()}, {self.decel_y.get()}, {self.decel_z.get()}]")
             del c
         except Exception as e:
             fmf_logging.log_error(f"set_SAD error: {e}")
@@ -896,7 +968,6 @@ class MoveCarriage(ctk.CTk):
 
     # -- used to save all current proportional, integral, derivative carriage attributes
     def set_PID(self):
-        global mwt_dict
         try:
             c = galil.GCommand
             c('KPA=' + str(int(self.entry_kp_x.get())))
@@ -917,18 +988,9 @@ class MoveCarriage(ctk.CTk):
             self.kd_x.set(self.entry_kd_x.get())
             self.kd_y.set(self.entry_kd_y.get())
             self.kd_z.set(self.entry_kd_z.get())
-            mwt_dict |= {'kp_x': self.kp_x.get()}
-            mwt_dict |= {'kp_y': self.kp_y.get()}
-            mwt_dict |= {'kp_z': self.kp_z.get()}
-            mwt_dict |= {'ki_x': self.ki_x.get()}
-            mwt_dict |= {'ki_y': self.ki_y.get()}
-            mwt_dict |= {'ki_z': self.ki_z.get()}
-            mwt_dict |= {'kd_x': self.kd_x.get()}
-            mwt_dict |= {'kd_y': self.kd_y.get()}
-            mwt_dict |= {'kd_z': self.kd_z.get()}
             self.checkbox_unlock_PID_status.set(0)
             self.button_set_PID.configure(state="disabled")
-            self.csv_generate()
+            fmf_logging.write_log(f"PID set: KP=[{self.kp_x.get()}, {self.kp_y.get()}, {self.kp_z.get()}], KI=[{self.ki_x.get()}, {self.ki_y.get()}, {self.ki_z.get()}], KD=[{self.kd_x.get()}, {self.kd_y.get()}, {self.kd_z.get()}]")
             del c
         except Exception as e:
             fmf_logging.log_error(f"set_PID error: {e}")
@@ -1005,10 +1067,9 @@ class MoveCarriage(ctk.CTk):
         del c
         fmf_logging.write_log("PID attributes recalled!")
 
-    # -- csv file that stores carriage values such as current position and movement limits
+    # -- csv file that stores runtime carriage state (positions and stop codes)
     @staticmethod
     def csv_generate():
-        # with open('mwt_storage.csv', 'w', newline='') as csv_file:
         try:
             with open(filepath, 'w', newline='') as csv_file:
                 writer = csv.writer(csv_file)

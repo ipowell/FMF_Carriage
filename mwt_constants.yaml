@@ -1,0 +1,66 @@
+# MWT Carriage Constants - Motor configuration parameters (read once at startup)
+
+# NOTE: YOU ALMOST CERTAINLY WILL NOT NEED TO CHANGE THESE VALUES. ONLY IF YOU ARE CHANGING THE CARRIAGE HARDWARE.
+# They are listed here for two reasons:
+# 1. To provide visibility into the constants used by the program (rather than having to dig through the code)
+# 2. They were previously being written to the CSV file every loop even though they were not changing.
+#    This should reduce the size of the CSV file and improve performance.
+
+# Default starting positions (millimeters)
+# These are fallback values if mwt_storage.csv is missing runtime positions
+# Note: This preserves the original behavior from the legacy CSV file
+default_positions:
+  x: 20.0
+  y: 20.0
+  z: 20.0
+
+# Default stop code (1 = motors stopped at commanded position)
+# This is the fallback if mwt_storage.csv is missing stop codes
+# Note: This preserves the original behavior from the legacy CSV file
+default_stop_code: 1
+
+# Forward/reverse limits (millimeters)
+limits:
+  x_fwd: 5000
+  x_rev: -500
+  y_fwd: 1500
+  y_rev: -1500
+  z_fwd: 1000
+  z_rev: -1
+
+# Speed settings (counts/sec)
+speed:
+  x: 2000
+  y: 1500
+  z: 300
+
+# Acceleration settings (counts/sec²)
+acceleration:
+  x: 1024
+  y: 1024
+  z: 1024
+
+# Deceleration settings (counts/sec²)
+deceleration:
+  x: 1024
+  y: 1024
+  z: 1024
+
+# PID Controller - Proportional gains
+pid_kp:
+  x: 2
+  y: 4
+  z: 4
+
+# PID Controller - Integral gains
+pid_ki:
+  x: 0.008
+  y: 0.024
+  z: 0.008
+
+# PID Controller - Derivative gains
+pid_kd:
+  x: 500
+  y: 100
+  z: 1000
+
