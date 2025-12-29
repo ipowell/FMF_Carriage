@@ -6,6 +6,10 @@
 # 2. They were previously being written to the CSV file every loop even though they were not changing.
 #    This should reduce the size of the CSV file and improve performance.
 
+# Serial baud rate
+# This is set by the Galil motor controller hardware configuration
+serial_baud: 19200
+
 # Encoder conversion factor (encoder counts per millimeter)
 # This defines the hardware relationship between encoder position and physical distance
 # This comment was left in the original carriage_gui code:

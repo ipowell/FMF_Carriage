@@ -1,9 +1,6 @@
 serial:
   port: COM2
 
-  # baud defaults to 19200, unlikely to need to change
-  baud: 19200
-
 files:
   mwt_storage: mwt_storage.csv
   mwt_constants: mwt_constants.yaml

@@ -54,9 +54,8 @@ def _resolve_path(path_value: str) -> str:
         return expanded
     return resource_path(expanded)
 
-# configured serial defaults
+# configured serial port (user can change based on which USB port is used)
 _serial_port = _config.get('serial', {}).get('port', 'COM2')
-_serial_baud = str(_config.get('serial', {}).get('baud', '19200'))
 
 # configured file paths
 _csv_path_cfg = _config.get('files', {}).get('mwt_storage', 'mwt_storage.csv')
@@ -100,6 +99,10 @@ try:
         if 'encoder_counts_per_mm' not in constants_data:
             fmf_logging.log_error(f"Missing 'encoder_counts_per_mm' in constants file")
         mwt_constants['encoder_counts_per_mm'] = constants_data.get('encoder_counts_per_mm', 40)
+        
+        if 'serial_baud' not in constants_data:
+            fmf_logging.log_error(f"Missing 'serial_baud' in constants file")
+        mwt_constants['serial_baud'] = str(constants_data.get('serial_baud', 19200))
         
         limits = constants_data.get('limits', {})
         if 'limits' not in constants_data:
@@ -191,13 +194,13 @@ class MoveCarriage(ctk.CTk):
         # - program attempts to connect to carriage, COM port must match what cpu sees/has assigned
         try:
             print('gclib version:', galil.GVersion())  # prints installed gclib version
-            galil.GOpen(_serial_port + ' --baud ' + _serial_baud)  # change to COM port used by carriage
+            galil.GOpen(_serial_port + ' --baud ' + mwt_constants['serial_baud'])  # change to COM port used by carriage
             print(galil.GInfo())  # prints connection information for carriage
 
         # - exception handler if program cannot connect to carriage
         except gclib.GclibError as e:
             print('Unexpected GclibError:', e)
-            fmf_logging.log_error(f"Serial connect failed [{_serial_port},{_serial_baud}]: {e}")
+            fmf_logging.log_error(f"Serial connect failed [{_serial_port},{mwt_constants['serial_baud']}]: {e}")
 
         # - code runs only if program connects to carriage successfully
         else:
@@ -796,10 +799,10 @@ class MoveCarriage(ctk.CTk):
             status = "Connected"
             print('gclib version:', galil.GVersion())  # prints installed gclib version
             try:
-                galil.GOpen(_serial_port + ' --baud ' + _serial_baud)  # change to COM port used by carriage
+                galil.GOpen(_serial_port + ' --baud ' + mwt_constants['serial_baud'])  # change to COM port used by carriage
                 print(galil.GInfo())
             except gclib.GclibError as e:
-                fmf_logging.log_error(f"Serial connect failed [{_serial_port},{_serial_baud}]: {e}")
+                fmf_logging.log_error(f"Serial connect failed [{_serial_port},{mwt_constants['serial_baud']}]: {e}")
 
     # TODO: motion complete after target - position = 0?
     # -- update carriage positions and stop codes
