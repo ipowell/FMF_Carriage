@@ -14,8 +14,8 @@ def write_log(user_action: str):
 
 def log_error(error_message: str):
     print(error_message)
-    with open(_ERROR_LOG_FILE, 'a', newline='') as txt_file:
-        txt_file.write(time.strftime("%Y-%m-%d %H:%M:%S") + " " + error_message)
+    with open(_ERROR_LOG_FILE, 'a') as txt_file:
+        txt_file.write(f'{time.strftime("%Y-%m-%d %H:%M:%S")} {error_message}\n')
 
 # [DEPRECATED FOR LOG FILE]
 # -- used to print event descriptions or carriage status to the GUI event log
