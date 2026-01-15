@@ -61,6 +61,7 @@ _serial_port = _config.get('serial', {}).get('port', 'COM2')
 _csv_path_cfg = _config.get('files', {}).get('mwt_storage', 'mwt_storage.csv')
 _constants_path_cfg = _config.get('files', {}).get('mwt_constants', 'mwt_constants.yaml')
 _log_path_cfg = _config.get('files', {}).get('error_log', 'mwt_error_log.txt')
+_event_log_path_cfg = _config.get('files', {}).get('event_log', 'mwt_event_log.txt')
 
 # UI appearance and color
 ctk.set_appearance_mode(_config.get('ui', {}).get('appearance', 'system').capitalize())  # Modes: "system", "dark", "light"
@@ -162,8 +163,10 @@ except Exception as e:
 
 # resolve and load runtime state from CSV; set error log path
 filepath = _resolve_path(_csv_path_cfg)
-resolved_log_path = _resolve_path(_log_path_cfg)
-fmf_logging.set_error_log_file(resolved_log_path)
+resolved_error_log_path = _resolve_path(_log_path_cfg)
+resolved_event_log_path = _resolve_path(_event_log_path_cfg)
+fmf_logging.set_error_log_file(resolved_error_log_path)
+fmf_logging.set_event_log_file(resolved_event_log_path)
 mwt_dict = {}
 try:
     with open(filepath, 'r') as _csv_file:
