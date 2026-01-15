@@ -16,9 +16,14 @@ python -m venv .venv
 
 If this doesn't work, try specifying `python3` instead of just `python`.
 
-To activate it on Windows, run:
+To activate it on Windows, from Command Prompt run:
 ```
 .venv\Scripts\activate
+```
+
+Or from PowerShell:
+```
+.\venv\Scripts\Activate.ps1
 ```
 
 For MacOS/Linux:
