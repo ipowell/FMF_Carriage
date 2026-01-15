@@ -676,6 +676,7 @@ class MoveCarriage(ctk.CTk):
     # - carriage functions
     # -- stop carriage move execution and freeze actual position values
     def stop_carriage(self):
+        fmf_logging.log_event("Beginning carriage stop...")
         try:
             c = galil.GCommand
             c('AB')
@@ -698,13 +699,15 @@ class MoveCarriage(ctk.CTk):
     def connect_carriage():
         global status
         if status == "Connected":
-            print(galil.GInfo())  # COM2, DMC2132 Rev 1.0n, 10483
+            fmf_logging.log_event(f"Carriage already connected on port {_serial_port}")
+            fmf_logging.log_event(galil.GInfo()) # COM2, DMC2132 Rev 1.0n, 10483
         else:
             status = "Connected"
-            print('gclib version:', galil.GVersion())  # prints installed gclib version
+            fmf_logging.log_event('gclib version:', galil.GVersion())  # prints installed gclib version
+            fmf_logging.log_event(f"Connecting to carriage on port {_serial_port} at baud rate {_serial_baud}...")
             try:
                 galil.GOpen(_serial_port + ' --baud ' + _serial_baud)  # change to COM port used by carriage
-                print(galil.GInfo())
+                fmf_logging.log_event(galil.GInfo())
             except gclib.GclibError as e:
                 fmf_logging.log_error(f"Serial connect failed [{_serial_port},{_serial_baud}]: {e}")
 
@@ -724,6 +727,9 @@ class MoveCarriage(ctk.CTk):
             z_pos = float(c('TPC')) / 40
             z_pos_str = str(z_pos)
             z_pos_round_str = str("%.1f" % z_pos)
+
+            if not (x_pos and y_pos and z_pos):
+                fmf_logging.log_error(f"Missing position: x={x_pos}, y={y_pos}, z={z_pos}")
 
             x_sc = str(c('SCA'))
             y_sc = str(c('SCB'))
@@ -757,6 +763,7 @@ class MoveCarriage(ctk.CTk):
     # -- move carriage to input position for axis
     # noinspection PyTypeChecker
     def move_axis(self, axis, move_target, axis_limit_fwd, axis_limit_rev):
+        fmf_logging.log_event(f"Move initiated, target is {axis}={move_target}, limit_rev={axis_limit_rev.get()} limit_fwd={axis_limit_fwd.get()}")
         app.bind_all("<1>", lambda event: event.widget.focus_set())
         try:
             move_encoder = str(float(move_target) * 40)
@@ -767,17 +774,14 @@ class MoveCarriage(ctk.CTk):
 
             elif axis == "X":
                 self.x_target.set(float(move_target))
-                fmf_logging.write_log("Move initiated, target is X=" + move_target)
                 c('PAA=' + str(move_encoder))
                 c('BGA')
             elif axis == "Y":
                 self.y_target.set(float(move_target))
-                fmf_logging.write_log("Move initiated, target is Y=" + move_target)
                 c('PAB=' + str(move_encoder))
                 c('BGB')
             elif axis == "Z":
                 self.z_target.set(float(move_target))
-                fmf_logging.write_log("Move initiated, target is Z=" + move_target)
                 c('PAC=' + str(move_encoder))
                 c('BGC')
             else:
